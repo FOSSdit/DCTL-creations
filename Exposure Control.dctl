@@ -1,0 +1,84 @@
+// Exposure Control from DWG to Linear
+// Can be used for quick adjustment for LUT creation
+// Author : Paul Prum
+// No Licensing, credit to Kaur Hendrikson (https://www.youtube.com/watch?v=6pRS6hxzJSo&list=PLAUgeAzlAB_SPFWG_pXbz49k7tTSZEb9W&index=4)
+
+__DEVICE__ float DWGtoLinear(float in) {
+    float DI_A = 0.0075f;
+    float DI_B = 7.0f;
+    float DI_C = 0.07329248f;
+    float DI_M = 10.44426855f;
+    float DI_LIN_CUT = 0.00262409f;
+    float DI_LOG_CUT = 0.02740668f;
+    float out = in;
+
+    if (in> DI_LOG_CUT) {
+        out = _powf(2.0f, (in / DI_C) - DI_B)-DI_A;
+    } else {
+        out = in/DI_M; 
+    }
+
+    return out;
+}
+
+__DEVICE__ float LinearToDWG(float in) {
+    float DI_A = 0.0075f;
+    float DI_B = 7.0f;
+    float DI_C = 0.07329248f;
+    float DI_M = 10.44426855f;
+    float DI_LIN_CUT = 0.00262409f;
+    float DI_LOG_CUT = 0.02740668f;
+    float out = in;
+
+    if (in > DI_LIN_CUT) {
+        out = (_log2f(in + DI_A) + DI_B)*DI_C;
+    } else {
+        out = in*DI_M; 
+    }
+
+    return out;
+}
+
+// Exposure slider w/ range
+DEFINE_UI_PARAMS(p_Exp, Exposure, DCTLUI_SLIDER_FLOAT, 0, -5, 5, 0.001)
+
+//Exposure checkbox -5 to +5 stops
+DEFINE_UI_PARAMS(p_minus5, - 5 stops, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(p_minus4, - 4 stops, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(p_minus3, - 3 stops, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(p_minus2, - 2 stops, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(p_minus1, - 1 stops, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(p_plus1, + 1 stops, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(p_plus2, + 2 stops, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(p_plus3, + 3 stops, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(p_plus4, + 4 stops, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(p_plus5, + 5 stops, DCTLUI_CHECK_BOX, 0)
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
+    float3 in_RGB = make_float3(p_R, p_G, p_B);
+    float3 out = in_RGB;
+
+    out.x = DWGtoLinear(out.x);
+    out.y = DWGtoLinear(out.y);
+    out.z = DWGtoLinear(out.z);
+    
+    // defines exposure power (2 times up and half a stop down)
+    out /= _powf(32, p_minus5);
+    out /= _powf(16, p_minus4);
+    out /= _powf(8, p_minus3);
+    out /= _powf(4, p_minus2);
+    out /= _powf(2, p_minus1);
+    out *= _powf(2, p_plus1);
+    out *= _powf(4, p_plus2);
+    out *= _powf(8, p_plus3);
+    out *= _powf(16, p_plus4);
+    out *= _powf(32, p_plus5);
+
+    out *= _powf(2, p_Exp);
+
+    out.x = LinearToDWG(out.x);
+    out.y = LinearToDWG(out.y);
+    out.z = LinearToDWG(out.z);
+
+    return out;
+}
